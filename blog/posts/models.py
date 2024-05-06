@@ -7,3 +7,6 @@ class post_model(models.Model):
     createdAtDate = models.DateField(auto_now_add=True)
     updatedAtTime = models.TimeField(auto_now=True)
     updatedAtDate = models.DateField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.title
