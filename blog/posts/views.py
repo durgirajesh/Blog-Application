@@ -50,7 +50,6 @@ class PostHandler(View):
             response = {
                 'username' : user_.username
             }
-
             posts_ = []            
             for post in posts:
                 post_ = {
