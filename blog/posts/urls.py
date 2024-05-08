@@ -1,6 +1,7 @@
 from django.urls import path
-from posts.views import Posts
+from posts.views import PostHandler, updatePost
 
 urlpatterns = [
-    path('', Posts.as_view())    
+    path('', PostHandler.as_view()),
+    path('<str:username>', updatePost, name='update_post')    
 ]

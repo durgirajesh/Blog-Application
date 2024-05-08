@@ -1,54 +1,102 @@
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import post_model 
-from .forms import post_form
+from .models import PostModel 
 from django.views.generic import View
 from django.utils.decorators import method_decorator
+from users.models import UserModel
+from users.views import isAuthenticated
 
 @method_decorator(csrf_exempt, name='dispatch')
-class Posts(View):
+class PostHandler(View):
     def post(self, request):
         response = {}
         post_data = json.loads(request.body.decode('utf-8'))
-        
-        post_title = post_data.get('title')
-        posts = post_model.objects.filter(title=post_title).first()
 
-        if posts is not None:
-            response['message'] = 'Title Already Exists'
-            response[posts.title] = posts.content
+        if post_data is not None:
+            username = post_data.get('username')
+            user = UserModel.objects.filter(username=username).first() 
+            if user is not None:
+                if isAuthenticated(request, username):
+                    post_title = post_data.get('title')
+                    post = PostModel.objects.filter(author = user, title=post_title).first()
 
-            return JsonResponse(response)
-        
-        post_data_form = post_form(post_data)
-        if post_data_form.is_valid():
-            post_data_form.save()
-            response['message'] = 'success'
-            return JsonResponse(response, status=200)
+                    if post is not None:
+                        response['message'] = 'Title Already Exists'
+                        response[post.title] = post.content
+                        return JsonResponse(response)
+
+                    new_post = PostModel(author = user, title = post_title, content = post_data.get('content'))
+                    if new_post:
+                        new_post.save()
+                        response['message'] = 'success, post created'
+                        return JsonResponse(response, status=200)
+                    else:
+                        response['error'] = 'No content'
+                        return JsonResponse(response, status=400)
+                else:
+                    return JsonResponse({'message' : f'{username} not logged in, please log in'})
+            else:
+                return JsonResponse({'message' : f'{username} not exists'})
         else:
-            response['error'] = post_data_form.errors
-            return JsonResponse(response, status=400)
+            return JsonResponse({'message' : 'Invalid post'})
     
-    def put(self, request):
+    def get(self, request):
+        username = request.GET.get('username')
+        if UserModel.objects.filter(username = username).exists() :
+            user_ = UserModel.objects.get(username = username) 
+            posts = PostModel.objects.filter(author = user_)
+            
+            response = {
+                'username' : user_.username
+            }
+
+            posts_ = []            
+            for post in posts:
+                post_ = {
+                    'title' : post.title ,
+                    'post' : post.content
+                }
+                posts_.append(post_)
+            
+            response['posts'] = posts_
+            return JsonResponse(response)
+        else:
+            return JsonResponse({'message' : 
+                                 f"{username} not exists"})
+    
+@csrf_exempt
+def updatePost(request, username):
+    if request.method == "PUT":
         try:
             jsonData = json.loads(request.body.decode('utf-8'))
         except json.JSONDecodeError:
             return JsonResponse({'message' : 'Error in Unmarshalling JSON data'})
         
-        title_ = request.GET.get('title')
-        posts = post_model.objects.filter(title = title_).first()
-        if posts is None:
-            return JsonResponse({'message' : 'No Post to update'})
+        if jsonData['content'] is None:
+            return JsonResponse({'message' : 'Invalid post'})
         
-        description = jsonData.get('content')
-        if description is not None:
-            if description == posts.content :
-                return JsonResponse({'message' : 'Same content, no update needed'})
-            
-            posts.content = description
-            posts.save()
-            return JsonResponse({'message' : 'succcess'}, status=200)
+        if UserModel.objects.filter(username=username).exists() :
+            if isAuthenticated(request, username):
+                post_title = jsonData.get('title')
+                user = UserModel.objects.filter(username=username).first() 
+                post = PostModel.objects.filter(author = user, title=post_title).first()
+
+                if post is not None:
+                    if post.title != jsonData['title']:
+                        return JsonResponse({'message' : 'Title mismatch, Invalid post to update'})
+                    
+                    if post.content == jsonData.get('content'):
+                        return JsonResponse({'message' : 'Not updated, received same post'})
+                    else:
+                        post.content = jsonData['content']
+                        post.save()
+                        return JsonResponse({'message' : f'{post.title} post updated'})
+                else:
+                    return JsonResponse({'message' : 'No post available to update'})
+            else:
+                return JsonResponse({'message' : f'{username} not logged in, please log in'})
         else:
-            return JsonResponse({'message' : 'Error, Invalid Description'})
-        
+            return JsonResponse({'message' : f'{username} not exists'})
+    else:
+        return JsonResponse({'message' : 'Invalid HTTP request'})
