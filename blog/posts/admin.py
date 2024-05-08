@@ -1,7 +1,7 @@
 from django.contrib import admin
-from .models import post_model
+from .models import PostModel
 
 class PostModelAdmin(admin.ModelAdmin):
-    list_display = ('title', 'content', 'createdAtTime', 'createdAtDate', 'updatedAtTime', 'updatedAtDate')
+    list_display = ('author', 'title', 'content', 'createdAtTime', 'createdAtDate', 'updatedAtTime', 'updatedAtDate')
 
-admin.site.register(post_model, PostModelAdmin)
+admin.site.register(PostModel, PostModelAdmin)
