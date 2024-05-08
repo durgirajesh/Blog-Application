@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.hashers import make_password
 
-class User(models.Model):
+class UserModel(models.Model):
     first_name = models.CharField(max_length=10)
     last_name = models.CharField(max_length=10)
     username = models.CharField(max_length=10, primary_key=True)
@@ -15,4 +15,4 @@ class User(models.Model):
     
     def save(self, *args, **kwargs):
         self.password = make_password(self.password)
-        super(User, self).save(*args, **kwargs)
+        super(UserModel, self).save(*args, **kwargs)
