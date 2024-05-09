@@ -22,8 +22,9 @@ class PostHandler(View):
                     post = PostModel.objects.filter(author = user, title=post_title).first()
 
                     if post is not None:
-                        response['message'] = 'Title Already Exists'
-                        response[post.title] = post.content
+                        response['message'] = 'Post already exists'
+                        response['title'] = post.title
+                        response['post'] = post.content
                         return JsonResponse(response)
 
                     new_post = PostModel(author = user, title = post_title, content = post_data.get('content'))
