@@ -1,7 +1,7 @@
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import PostModel 
+from .models import PostModel, CommentsModel
 from django.views.generic import View
 from django.utils.decorators import method_decorator
 from users.models import UserModel
@@ -102,3 +102,60 @@ def updatePost(request, username):
         return JsonResponse({'message' : f'{post.title} post updated'})
     
     return JsonResponse({'message' : 'Invalid HTTP request'})
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CommentsHandler(View):
+    def post(self, request):
+        try:
+            jsonData = json.loads(request.body.decode('utf-8'))
+        except json.JSONDecodeError:
+            return JsonResponse({'message' : "Couldn't Unmarshall JSON Data"})
+        
+        username = jsonData['username']
+        postTitle = jsonData['title']
+        comment = jsonData['comment']
+
+        if not UserModel.objects.filter(username=username).exists():
+            return JsonResponse({'message' : f'{username} not exists'})
+        
+        post = PostModel.objects.filter(author = username, title = postTitle).first()
+        if post is None:
+            return JsonResponse({'message' : 'Error, Post not available'})
+        
+        new_comment = CommentsModel(post = post, comment = comment)
+        new_comment.save()
+        return JsonResponse({'message' : f'comment added for : {postTitle}'})  
+
+    def get(self, request):
+        username = request.GET.get('username')
+        if not UserModel.objects.filter(username = username).exists():
+            return JsonResponse({'message' : f'{username} not exists'})
+        
+        __user = UserModel.objects.get(username = username)
+        __posts = PostModel.objects.filter(author = __user)
+
+        if __posts.count() < 0:
+            return JsonResponse({'message' : f'No posts available for {username}'})
+        
+        __response = {'username' : username}
+        __titles = []
+
+        for __post in __posts:
+            __post_ = PostModel.objects.get(author = __user, title = __post.title)
+            __commentResponse = {'title' : __post.title}
+            __comments = []
+
+            if __post_ is not None:
+                __commentslist = CommentsModel.objects.filter(post = __post_)
+                for __comment in __commentslist:
+                    __comments.append(__comment.comment)
+                
+                __commentResponse['comments'] = __comments
+            
+            __titles.append(__commentResponse)
+        
+        __response['posts'] = __titles
+        return JsonResponse(__response, status=200)
+                
+    def put(self, request):
+        pass

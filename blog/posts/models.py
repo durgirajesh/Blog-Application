@@ -12,3 +12,10 @@ class PostModel(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+class CommentsModel(models.Model):
+    post = models.ForeignKey(PostModel, on_delete=models.CASCADE)
+    comment = models.TextField(max_length=1000)
+
+    def __str__(self) -> str:
+        return self.comment
