@@ -131,10 +131,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-
-# Django migrations
-**/migrations/*
-!**/migrations/__init__.py
-
-
-blog/**/migrations/
