@@ -21,19 +21,19 @@ class UserAccountHandler(View):
         email = data.get('Email')
         password = data.get('password')
 
+        existing_user = UserModel.objects.filter(username=username).first()
+        if existing_user is not None:
+            return JsonResponse({'message' : f'User exists : {username}'})
+        
+        if UserModel.objects.filter(email = email).exists():
+            return JsonResponse({'message' : f'Email is already taken : {email}'})
+        
         if first_name and last_name and username and email and password:
-            existing_user = UserModel.objects.filter(username=username).first()
-            if existing_user is None:
-                if UserModel.objects.filter(email = email).exists():
-                    return JsonResponse({'message' : f'Email is already taken : {email}'})
-                
-                user = UserModel(first_name=first_name, last_name=last_name, username=username, email=email, password=password)
-                user.save()
-                return JsonResponse({'message' : f'Account created : {username}'})
-            else:
-                return JsonResponse({'message' : f'User exists : {username}'})
-        else:
-            return JsonResponse({'message', 'Invalid details'})
+            user = UserModel(first_name=first_name, last_name=last_name, username=username, email=email, password=password)
+            user.save()
+            return JsonResponse({'message' : f'Account created : {username}'})
+           
+        return JsonResponse({'message', 'Invalid details'})
 
 
 @csrf_exempt
@@ -47,51 +47,50 @@ def updatePassword(request, username):
             return JsonResponse({'message' : 'Unmarshalling JSON data failed'})
 
         newPassword = passwordData.get('New Password')
-        if username and newPassword:
-            user = UserModel.objects.filter(username=username).first()
-            if user is not None:
-                if not check_password(newPassword, user.password):
-                    user.password = newPassword
-                    user.save()
+        user = UserModel.objects.filter(username=username).first()
+        if newPassword is None or user is None:
+            return JsonResponse({'message' : 'Invalid details'}) 
+        
+        if check_password(newPassword, user.password):
+            return JsonResponse({'message' : 'New Password and Old password are same'})
+        
+        user.password = newPassword
+        user.save()
 
-                    # log out after update
-                    try :
-                        del request.session['user_id']
-                    except KeyError:
-                        pass
-
-                    return JsonResponse({'message' : 'Password Updated'})
-                else:
-                    return JsonResponse({'message' : 'New Password and Old password are same'})
-            else:
-                return JsonResponse({'message' : f'Unknown user : {username}'})  
-        else:
-            return JsonResponse({'message' : 'Invalid credientials'})  
-    else:
-        return JsonResponse({'message' : 'Invalid HTTP request'})
+        # log out after update
+        try :
+            del request.session['user_id']
+        except KeyError:
+            pass
+        return JsonResponse({'message' : 'Password Updated'})
+    
+    return JsonResponse({'message' : 'Invalid HTTP request'})
 
 @csrf_exempt
 def login_view(request):
-    if request.method == "POST":
-        try:
-            userData = json.loads(request.body.decode('utf-8'))
-        except json.JSONDecodeError:
-            return JsonResponse({'message' : 'Unmarshalling JSON data failed'})
-        
-        username = userData.get('username')
-        password = userData.get('password')
-
-        user = UserModel.objects.filter(username=username).first()
-        if user and check_password(password, user.password):
-            if isAuthenticated(request, username):
-                return JsonResponse({'message' : f'{username} already logged in'})
-            else:
-                request.session['user_id'] = username
-                return JsonResponse({'message' : f'{username} logged in'})
-        else:
-            return JsonResponse({'message' : f'{username} not exists or Invalid credientials'})
-    else:
+    if request.method != "POST":
         return JsonResponse({'message' :'Invalid HTTP request'})
+    
+    try:
+        userData = json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return JsonResponse({'message' : 'Unmarshalling JSON data failed'})
+    
+    username = userData.get('username')
+    password = userData.get('password')
+    user = UserModel.objects.filter(username=username).first()
+    
+    if user is None:
+        return JsonResponse({'message' : f'{username} not exists'})
+    
+    if isAuthenticated(request, username):
+        return JsonResponse({'message' : f'{username} already logged in'})
+    
+    if check_password(password, user.password):
+        request.session['user_id'] = username
+        return JsonResponse({'message' : f'{username} logged in'})
+
+    return JsonResponse({'message' : f'{username} not exists or Invalid credientials'})
 
 def isAuthenticated(request, username):
     try :
@@ -112,16 +111,19 @@ def logout_view(request):
         password = userData.get('password')
 
         user = UserModel.objects.filter(username=username).first()
-        if user and check_password(password, user.password):
-            if not isAuthenticated(request, username):
-                return JsonResponse({'message' : f'{username} not logged in or already logged out'})
-            else:
-                try:
-                    del request.session['user_id']
-                except KeyError:
-                    pass
-                return JsonResponse({'message' : f'{username} logged out'})
-        else:
+        if user is None:
+            return JsonResponse({'message' : f'{username} not exists'})
+        
+        if not isAuthenticated(request, username):
+            return JsonResponse({'message' : f'{username} not logged in or already logged out'})
+        
+        if not check_password(password, user.password):
             return JsonResponse({'message' : 'Invalid Credientials'})
-    else:
-        return JsonResponse({'message' :'Invalid HTTP request'})
+
+        try:
+            del request.session['user_id']
+        except KeyError:
+            pass
+        return JsonResponse({'message' : f'{username} logged out'})
+
+    return JsonResponse({'message' :'Invalid HTTP request'})

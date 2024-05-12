@@ -13,34 +13,37 @@ class PostHandler(View):
         response = {}
         post_data = json.loads(request.body.decode('utf-8'))
 
-        if post_data is not None:
-            username = post_data.get('username')
-            user = UserModel.objects.filter(username=username).first() 
-            if user is not None:
-                if isAuthenticated(request, username):
-                    post_title = post_data.get('title')
-                    post = PostModel.objects.filter(author = user, title=post_title).first()
-
-                    if post is not None:
-                        response['message'] = 'Post already exists'
-                        response['title'] = post.title
-                        response['post'] = post.content
-                        return JsonResponse(response)
-
-                    new_post = PostModel(author = user, title = post_title, content = post_data.get('content'))
-                    if new_post:
-                        new_post.save()
-                        response['message'] = 'success, post created'
-                        return JsonResponse(response, status=200)
-                    else:
-                        response['error'] = 'No content'
-                        return JsonResponse(response, status=400)
-                else:
-                    return JsonResponse({'message' : f'{username} not logged in, please log in'})
-            else:
-                return JsonResponse({'message' : f'{username} not exists'})
-        else:
+        # validate post_data
+        if post_data is None or len(post_data) != 3:
             return JsonResponse({'message' : 'Invalid post'})
+
+        # validate user
+        username = post_data.get('username')
+        user = UserModel.objects.filter(username=username).first()
+        if user is None:
+            return JsonResponse({'message' : f'{username} not exists'})
+        
+        # valid user authentication
+        if not isAuthenticated(request, username):
+            return JsonResponse({'message' : f'{username} not logged in, please log in'})
+        
+        post_title = post_data.get('title')
+        post = PostModel.objects.filter(author = user, title=post_title).first()
+
+        if post is not None:
+            response['message'] = 'Post already exists'
+            response['title'] = post.title
+            response['post'] = post.content
+            return JsonResponse(response)
+
+        new_post = PostModel(author = user, title = post_title, content = post_data.get('content'))
+        if new_post:
+            new_post.save()
+            response['message'] = 'success, post created'
+            return JsonResponse(response, status=200)
+        else:
+            response['error'] = 'No content'
+            return JsonResponse(response, status=400)
     
     def get(self, request):
         username = request.GET.get('username')
@@ -79,27 +82,29 @@ def updatePost(request, username):
         if jsonData['content'] is None:
             return JsonResponse({'message' : 'Invalid post'})
         
-        if UserModel.objects.filter(username=username).exists() :
-            if isAuthenticated(request, username):
-                post_title = jsonData.get('title')
-                user = UserModel.objects.filter(username=username).first() 
-                post = PostModel.objects.filter(author = user, title=post_title).first()
-
-                if post is not None:
-                    if post.title != jsonData['title']:
-                        return JsonResponse({'message' : 'Title mismatch, Invalid post to update'})
-                    
-                    if post.content == jsonData.get('content'):
-                        return JsonResponse({'message' : 'Not updated, received same post'})
-                    else:
-                        post.content = jsonData['content']
-                        post.save()
-                        return JsonResponse({'message' : f'{post.title} post updated'})
-                else:
-                    return JsonResponse({'message' : 'No post available to update'})
-            else:
-                return JsonResponse({'message' : f'{username} not logged in, please log in'})
-        else:
+        if not UserModel.objects.filter(username=username).exists() :
             return JsonResponse({'message' : f'{username} not exists'})
+        
+        if not isAuthenticated(request, username):
+            return JsonResponse({'message' : f'{username} not logged in, please log in'})
+        
+        post_title = jsonData.get('title')
+        user = UserModel.objects.filter(username=username).first() 
+        post = PostModel.objects.filter(author = user, title=post_title).first()
+
+        if post is None:
+            return JsonResponse({'message' : 'No post available to update'})
+        
+        if post.title != jsonData['title']:
+            return JsonResponse({'message' : 'Title mismatch, Invalid post to update'})
+            
+        if post.content == jsonData.get('content'):
+            return JsonResponse({'message' : 'Not updated, received same post'})
+    
+        # After all checks, update the post
+        post.content = jsonData['content']
+        post.save()
+        return JsonResponse({'message' : f'{post.title} post updated'})
+    
     else:
         return JsonResponse({'message' : 'Invalid HTTP request'})
