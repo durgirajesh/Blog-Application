@@ -14,7 +14,7 @@ class PostHandler(View):
         post_data = json.loads(request.body.decode('utf-8'))
 
         # validate post_data
-        if post_data is None or len(post_data) != 3:
+        if post_data is None or len(post_data) != 3 or post_data['username'] is None or post_data['title'] is None or post_data['content'] is None:
             return JsonResponse({'message' : 'Invalid post'})
 
         # validate user
@@ -37,13 +37,9 @@ class PostHandler(View):
             return JsonResponse(response)
 
         new_post = PostModel(author = user, title = post_title, content = post_data.get('content'))
-        if new_post:
-            new_post.save()
-            response['message'] = 'success, post created'
-            return JsonResponse(response, status=200)
-        else:
-            response['error'] = 'No content'
-            return JsonResponse(response, status=400)
+        new_post.save()
+        response['message'] = 'success, post created'
+        return JsonResponse(response, status=200)
     
     def get(self, request):
         username = request.GET.get('username')
@@ -67,9 +63,8 @@ class PostHandler(View):
             
             response['posts'] = posts_
             return JsonResponse(response)
-        else:
-            return JsonResponse({'message' : 
-                                 f"{username} not exists"})
+        
+        return JsonResponse({'message' : f"{username} not exists"})
     
 @csrf_exempt
 def updatePost(request, username):
@@ -106,5 +101,4 @@ def updatePost(request, username):
         post.save()
         return JsonResponse({'message' : f'{post.title} post updated'})
     
-    else:
-        return JsonResponse({'message' : 'Invalid HTTP request'})
+    return JsonResponse({'message' : 'Invalid HTTP request'})
