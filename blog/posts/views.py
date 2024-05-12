@@ -58,8 +58,8 @@ class PostHandler(View):
                     'post' : post.content
                 }
 
-                posts_['created at'] = post.createdAtTime
-                posts_['updated at'] = post.updatedAtTime
+                post_['created at'] = post.createdAtTime
+                post_['updated at'] = post.updatedAtTime
                 posts_.append(post_)
             
             response['posts'] = posts_
