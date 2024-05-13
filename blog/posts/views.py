@@ -57,11 +57,11 @@ class PostHandler(View):
                     'post' : post.content
                 }
 
-                post_['created at'] = post.createdAtTime
-                post_['updated at'] = post.updatedAtTime
+                post_['created at'] = post.createdAtTime # type: ignore
+                post_['updated at'] = post.updatedAtTime # type: ignore
                 posts_.append(post_)
             
-            response['posts'] = posts_
+            response['posts'] = posts_ # type: ignore
             return JsonResponse(response)
         
         return JsonResponse({'message' : f"{username} not exists"})
