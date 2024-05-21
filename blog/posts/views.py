@@ -1,7 +1,7 @@
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import PostModel
+from .models import CommentModel, PostModel, ReplyModel
 from django.views.generic import View
 from django.utils.decorators import method_decorator
 from users.models import UserModel
@@ -108,55 +108,122 @@ def updatePost(request, username):
 class CommentsHandler(View):
     def post(self, request):
         try:
-            jsonData = json.loads(request.body.decode('utf-8'))
+            commentData = json.loads(request.body.decode('utf-8'))
         except json.JSONDecodeError:
-            return JsonResponse({'message' : "Couldn't Unmarshall JSON Data"})
+            return JsonResponse({'message' : "Couldn't unmarshall Data"})
         
-        username = jsonData['username']
-        postTitle = jsonData['title']
-        comment = jsonData['comment']
-
-        if not UserModel.objects.filter(username=username).exists():
-            return JsonResponse({'message' : f'{username} not exists'})
+        if commentData is None or len(commentData) < 3:
+            return JsonResponse({'message' : 'Invalid Json Data'})
         
-        post = PostModel.objects.filter(author = username, title = postTitle).first()
-        if post is None:
-            return JsonResponse({'message' : 'Error, Post not available'})
+        postUser = commentData.get('author')
+        postTitle = commentData.get('title')
+        commenter = commentData.get('username')
+        comment = commentData.get('comment')
+
+        author = UserModel.objects.get(username = postUser)
+        commenterObj_ = UserModel.objects.get(username = commenter) 
+        if author is None or commenterObj_ is None:
+            return JsonResponse({'message' : 'User doesnt exist'})
         
-        new_comment = CommentsModel(post = post, comment = comment)
-        new_comment.save()
-        return JsonResponse({'message' : f'comment added for : {postTitle}'})  
-
-    def get(self, request):
-        username = request.GET.get('username')
-        if not UserModel.objects.filter(username = username).exists():
-            return JsonResponse({'message' : f'{username} not exists'})
+        postObj = PostModel.objects.filter(author = author, title = postTitle).first()   
+        if postObj is None :
+            return JsonResponse({'message' : 'Invalid User Details'})
         
-        __user = UserModel.objects.get(username = username)
-        __posts = PostModel.objects.filter(author = __user)
+        if 'replied' in commentData:
+            replyObj = commentData.get('replied')
 
-        if __posts.count() < 0:
-            return JsonResponse({'message' : f'No posts available for {username}'})
-        
-        __response = {'username' : username}
-        __titles = []
-
-        for __post in __posts:
-            __post_ = PostModel.objects.get(author = __user, title = __post.title)
-            __commentResponse = {'title' : __post.title}
-            __comments = []
-
-            if __post_ is not None:
-                __commentslist = CommentsModel.objects.filter(post = __post_)
-                for __comment in __commentslist:
-                    __comments.append(__comment.comment)
-                
-                __commentResponse['comments'] = __comments
+            if replyObj is None:
+                return JsonResponse({'message' : 'No reply given'})
             
-            __titles.append(__commentResponse)
+            username = replyObj.get('username')
+            if not UserModel.objects.filter(username=username).exists():
+                return JsonResponse({'message' : f'{username}, replied user not exists'})
+            
+            reply = replyObj.get('reply')
+            user = UserModel.objects.filter(username=username).first()
+
+            if user is None:
+                user = UserModel(username = username)
+
+            replyData = ReplyModel(reply=reply, username=user)
+            commenterObj = CommentModel.objects.filter(post = postObj, comment = comment, commenter = commenterObj_).first()
+            if commenterObj is None:
+                return JsonResponse({'message' : 'No comment to reply'})
+
+            if commenterObj.RID is not None:
+                return JsonResponse({'message' : 'Already replied'})
+            
+            replyData.save()
+            commenterObj.RID = replyData
+            commenterObj.save()
+            return JsonResponse({'message' : 'replied successfull'})
+            
+        commentObj = CommentModel(post=postObj, comment = comment, commenter = commenterObj_)
+        commentObj.save()
+        return JsonResponse({'message' : f'Comment added from {commenter}'})
+
+    
+    def get(self, request):
+        try:
+            JsonData = json.loads(request.body.decode('utf8'))
+        except json.JSONDecodeError:
+            return JsonResponse({'message' : 'Unable to unmarshall data'})
         
-        __response['posts'] = __titles
-        return JsonResponse(__response, status=200)
+        if JsonData is None or len(JsonData) < 1 or 'username' not in JsonData or JsonData['username'] is None:
+            return JsonResponse({'message' : 'Invalid Json Data'})
+        
+        username = JsonData['username']
+        author = UserModel.objects.filter(username=username).first()
+        response = {}
+        if author is None:
+            return JsonResponse({'message' : 'No user exists'})
+        
+        response['author'] = username
+        if 'title' in JsonData:
+            title = JsonData['title']
+            post = PostModel.objects.filter(author=author, title=title).first()
+            if post is None:
+                return JsonResponse({'message' : f'No post created for {author.username}'})
+            
+            response['post'] = post.title
+            comments = []
+            postComments = CommentModel.objects.filter(post=post)
+            for postComment in postComments:
+                Comment = {
+                    'username' : postComment.commenter.username, # type: ignore
+                    'comment' : postComment.comment
+                }
+                if postComment.RID :
+                    Comment['username(reply)'] = postComment.RID.username.username
+                    Comment['reply'] = postComment.RID.reply
+                comments.append(Comment)
+            response["Comments"] = comments # type: ignore
+            return JsonResponse(response)
+
+        posts = PostModel.objects.filter(author=author)
+        userPosts = []
+        for post in posts:
+            UserPosts = {
+                'title' : post.title,
+                'post' : post.content
+            }
+            comments = []
+            postComments = CommentModel.objects.filter(post=post)
+            for postComment in postComments:
+                Comment = {
+                    'username' : postComment.commenter.username, # type: ignore
+                    'comment' : postComment.comment
+                }
+
+                if postComment.RID :
+                    Comment['username(reply)'] = postComment.RID.username.username
+                    Comment['reply'] = postComment.RID.reply
+                comments.append(Comment)
+            UserPosts["Comments"] = comments # type: ignore
+            userPosts.append(UserPosts)
+        response["posts"] = userPosts # type: ignore
+            
+        return JsonResponse(response)
                 
     def put(self, request):
         pass
