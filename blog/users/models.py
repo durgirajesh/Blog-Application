@@ -16,3 +16,4 @@ class UserModel(models.Model):
     def save(self, *args, **kwargs):
         self.password = make_password(self.password)
         super(UserModel, self).save(*args, **kwargs)
+
