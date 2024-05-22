@@ -2,8 +2,8 @@
 
 Functionalities. 
 User Authentication and Authorization
--> User registration
--> User login/logout
+* User registration
+* User login/logout
 Post Management
 -> create new blog
 -> edit existing blog
