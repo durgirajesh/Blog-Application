@@ -1,7 +1,7 @@
 # Blog-Application
 
 Functionalities. 
-User Authentication and Authorization
+1. User Authentication and Authorization
 * User registration
 * User login/logout
 Post Management
