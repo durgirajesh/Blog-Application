@@ -2,13 +2,13 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import CommentModel, PostModel, ReplyModel
-from django.views.generic import View
+from django.views import View
 from django.utils.decorators import method_decorator
 from users.models import UserModel
 from users.views import isAuthenticated
 
 @method_decorator(csrf_exempt, name='dispatch')
-class PostHandler(View):
+class PostCreateHandler(View):
     def post(self, request):
         response = {}
         post_data = json.loads(request.body.decode('utf-8'))
@@ -62,20 +62,19 @@ class PostHandler(View):
                 posts_.append(post_)
             
             response['posts'] = posts_ # type: ignore
-            return JsonResponse(response)
-        
+            return JsonResponse(response)        
         return JsonResponse({'message' : f"{username} not exists"})
-    
-@csrf_exempt
-def updatePost(request, username):
-    if request.method == "PUT":
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PostUpdateHandler(View):
+    def put(self, request, username):
         try:
             jsonData = json.loads(request.body.decode('utf-8'))
         except json.JSONDecodeError:
             return JsonResponse({'message' : 'Error in Unmarshalling JSON data'})
         
-        if jsonData['content'] is None:
-            return JsonResponse({'message' : 'Invalid post'})
+        if 'content' not in jsonData:
+            return JsonResponse({'message' : 'Invalid Request, need content to update'})
         
         if not UserModel.objects.filter(username=username).exists() :
             return JsonResponse({'message' : f'{username} not exists'})
@@ -100,9 +99,27 @@ def updatePost(request, username):
         post.content = jsonData['content']
         post.save()
         return JsonResponse({'message' : 'post updated', 
+                             'author' : post.author.username,
                              'title' : post.title})
     
-    return JsonResponse({'message' : 'Invalid HTTP request'})
+    def delete(self, request, username):       
+        if not isAuthenticated(request, username):
+            return JsonResponse({'message' : f'{username} not logged in, please log in'})
+        
+        title = request.GET.get('title')
+        author = UserModel.objects.get(username=username)
+        if  title is None:
+            posts = PostModel.objects.filter(author = author)
+            for post in posts:
+                post.delete()    
+            return JsonResponse({'message' : f'All posts deleted from {username}'})
+        
+        # delete only particular post
+        post = PostModel.objects.filter(author = author, title = title).first()
+        if post is None:
+            return JsonResponse({'message' : 'Post not exists'})
+        post.delete()
+        return JsonResponse({'message' : f'post of {title} from {username} is deleted'})
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CommentsHandler(View):
@@ -164,23 +181,16 @@ class CommentsHandler(View):
 
     
     def get(self, request):
-        try:
-            JsonData = json.loads(request.body.decode('utf8'))
-        except json.JSONDecodeError:
-            return JsonResponse({'message' : 'Unable to unmarshall data'})
-        
-        if JsonData is None or len(JsonData) < 1 or 'username' not in JsonData or JsonData['username'] is None:
-            return JsonResponse({'message' : 'Invalid Json Data'})
-        
-        username = JsonData['username']
+        username = request.GET.get('author')
+        title = request.GET.get('title')
+
         author = UserModel.objects.filter(username=username).first()
         response = {}
         if author is None:
             return JsonResponse({'message' : 'No user exists'})
         
         response['author'] = username
-        if 'title' in JsonData:
-            title = JsonData['title']
+        if title :
             post = PostModel.objects.filter(author=author, title=title).first()
             if post is None:
                 return JsonResponse({'message' : f'No post created for {author.username}'})
@@ -215,15 +225,16 @@ class CommentsHandler(View):
                     'comment' : postComment.comment
                 }
 
-                if postComment.RID :
-                    Comment['username(reply)'] = postComment.RID.username.username
-                    Comment['reply'] = postComment.RID.reply
+                if postComment.RID is None:
+                    comments.append(Comment)
+                    continue
+
+                Comment['username(reply)'] = postComment.RID.username.username
+                Comment['reply'] = postComment.RID.reply
                 comments.append(Comment)
+
             UserPosts["Comments"] = comments # type: ignore
             userPosts.append(UserPosts)
         response["posts"] = userPosts # type: ignore
-            
         return JsonResponse(response)
                 
-    def put(self, request):
-        pass
